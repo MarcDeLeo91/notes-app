@@ -1,0 +1,13 @@
+.vscode/
+.env
+.env.local
+node_modules/
+bin/
+obj/
+*.db
+*.log
+publish/
+*.user
+*.suo
+.idea/
+*.vs/
