@@ -1,4 +1,3 @@
-// src/pages/Dashboard.jsx
 import React, { useEffect, useState } from 'react';
 import { getNotes, createNote, deleteNote } from '../services/note.service';
 import NoteCard from '../components/NoteCard';
@@ -6,16 +5,17 @@ import { logout } from '../services/auth.service';
 import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
-  const [notes, setNotes] = useState([]);
+  const [notes, setNotes] = useState([]); // Inicializa como un array vacío
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [error, setError] = useState(null); // Estado para manejar errores
   const navigate = useNavigate();
 
+  // Cargar notas desde el backend
   const load = async () => {
     try {
-      const r = await getNotes(); // r es la respuesta axios
-      setNotes(r.data);
+      const response = await getNotes();
+      setNotes(response.data || []); // Si no hay datos, establece un array vacío
       setError(null); // Limpiar errores si la solicitud es exitosa
     } catch (err) {
       console.error('Error al cargar las notas:', err.response?.data || err.message);
@@ -25,23 +25,32 @@ export default function Dashboard() {
         navigate('/login');
         return;
       }
-      setError('No se pudieron cargar las notas. Verifica tu conexión o inicia sesión nuevamente.');
+      setError(
+        err.response?.data?.message ||
+        'No se pudieron cargar las notas. Verifica tu conexión o inicia sesión nuevamente.'
+      );
+      setNotes([]); // Establece un array vacío en caso de error
     }
   };
 
+  // Cargar notas al montar el componente
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Crear una nueva nota
   const add = async (e) => {
     e.preventDefault();
+    if (!title.trim() || !content.trim()) {
+      setError('El título y el contenido no pueden estar vacíos.');
+      return;
+    }
     try {
-      // No busques jwtToken — usamos 'token' y authHeader en servicios
       await createNote({ title, content });
       setTitle('');
       setContent('');
-      await load();
+      await load(); // Recargar las notas después de crear una
     } catch (err) {
       console.error('Error al crear la nota:', err.response?.data || err.message);
       if (err.response?.status === 401) {
@@ -49,14 +58,18 @@ export default function Dashboard() {
         navigate('/login');
         return;
       }
-      setError('No se pudo crear la nota. Verifica tu conexión o inicia sesión nuevamente.');
+      setError(
+        err.response?.data?.message ||
+        'No se pudo crear la nota. Verifica tu conexión o intenta nuevamente.'
+      );
     }
   };
 
+  // Eliminar una nota
   const remove = async (id) => {
     try {
       await deleteNote(id);
-      await load();
+      await load(); // Recargar las notas después de eliminar una
     } catch (err) {
       console.error('Error al eliminar la nota:', err.response?.data || err.message);
       if (err.response?.status === 401) {
@@ -64,7 +77,10 @@ export default function Dashboard() {
         navigate('/login');
         return;
       }
-      setError('No se pudo eliminar la nota. Verifica tu conexión o inicia sesión nuevamente.');
+      setError(
+        err.response?.data?.message ||
+        'No se pudo eliminar la nota. Verifica tu conexión o intenta nuevamente.'
+      );
     }
   };
 
@@ -78,20 +94,26 @@ export default function Dashboard() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required
+          maxLength={50} // Límite de longitud
         />
         <input
           placeholder="Contenido"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           required
+          maxLength={200} // Límite de longitud
         />
         <button type="submit">Crear</button>
       </form>
 
       <div style={{ display: 'grid', gap: 10 }}>
-        {notes.map((n) => (
-          <NoteCard key={n.id} note={n} onDelete={() => remove(n.id)} />
-        ))}
+        {notes && notes.length > 0 ? (
+          notes.map((note) => (
+            <NoteCard key={note.id} note={note} onDelete={() => remove(note.id)} />
+          ))
+        ) : (
+          <p>No hay notas disponibles.</p>
+        )}
       </div>
     </div>
   );

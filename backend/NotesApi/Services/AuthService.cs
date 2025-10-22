@@ -42,8 +42,7 @@ namespace NotesApi.Services
             if (user == null || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
                 return null;
 
-            // Read configured key (prefer base64). This accepts either a base64 value at Jwt:KeyBase64
-            // or falls back to Jwt:Key (plain/utf8). It then validates length (must be > 256 bits).
+            // Leer la clave configurada (preferentemente en base64)
             var configuredKey = _config["Jwt:KeyBase64"] ?? _config["Jwt:Key"];
             if (string.IsNullOrEmpty(configuredKey))
             {
@@ -53,16 +52,16 @@ namespace NotesApi.Services
             byte[] keyBytes;
             try
             {
-                // try decode base64 first (recommended)
+                // Intentar decodificar como base64 (recomendado)
                 keyBytes = Convert.FromBase64String(configuredKey);
             }
             catch (FormatException)
             {
-                // not base64, fall back to UTF8 bytes
+                // Si no es base64, usar UTF8
                 keyBytes = Encoding.UTF8.GetBytes(configuredKey);
             }
 
-            // Ensure key is long enough for HMAC-SHA256 (must be greater than 256 bits per library error)
+            // Validar que la clave sea suficientemente larga para HMAC-SHA256
             if (keyBytes.Length * 8 <= 256)
             {
                 throw new InvalidOperationException("Configured JWT key is too short. Provide a key longer than 256 bits (recommended: 512 bits). Use a base64-encoded value in configuration under 'Jwt:KeyBase64'.");
@@ -79,9 +78,12 @@ namespace NotesApi.Services
                     new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                     new Claim(ClaimTypes.Email, user.Email)
                 }),
-                Expires = DateTime.UtcNow.AddDays(7),
+                Expires = DateTime.UtcNow.AddDays(7), // Token válido por 7 días
+                NotBefore = DateTime.UtcNow, // Token válido inmediatamente
+                IssuedAt = DateTime.UtcNow, // Fecha de emisión
                 SigningCredentials = creds,
-                Issuer = _config["Jwt:Issuer"]
+                Issuer = _config["Jwt:Issuer"],
+                Audience = _config["Jwt:Audience"] // Validar el Audience
             };
 
             var token = tokenHandler.CreateToken(tokenDescriptor);

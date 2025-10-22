@@ -1,41 +1,84 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { login } from '../services/auth.service';
+import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 
-export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const nav = useNavigate();
+const Login = () => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const navigate = useNavigate();
 
-  const submit = async (e) => {
-    e.preventDefault();
-    setError('');
-    try {
-      const response = await login(email, password); // Asegúrate de que `login` devuelva el token
-      const token = response.data.token; // Ajusta según la estructura de la respuesta
-      localStorage.setItem('token', token); // Guarda el token en localStorage
-      nav('/dashboard'); // Redirige al dashboard
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Error');
-    }
-  };
+    const submit = async (e) => {
+        e.preventDefault();
+        setError(''); // Limpiar errores previos
 
-  return (
-    <div style={{ maxWidth: 480, margin: '0 auto' }}>
-      <h2>Login</h2>
-      <form onSubmit={submit}>
-        <div>
-          <label>Email</label><br/>
-          <input value={email} onChange={e=>setEmail(e.target.value)} required />
+        // Validaciones adicionales
+        if (!email.trim() || !password.trim()) {
+            setError('El correo electrónico y la contraseña son obligatorios.');
+            return;
+        }
+        if (!/\S+@\S+\.\S+/.test(email)) {
+            setError('El correo electrónico no tiene un formato válido.');
+            return;
+        }
+        if (password.length < 6) {
+            setError('La contraseña debe tener al menos 6 caracteres.');
+            return;
+        }
+
+        try {
+            const response = await login(email, password);
+            console.log('Respuesta del servidor:', response); // Depuración
+            if (response && response.token) {
+                localStorage.setItem('token', response.token); // Guarda el token en localStorage
+                navigate('/dashboard'); // Redirige al dashboard
+            } else {
+                throw new Error('Respuesta inesperada del servidor');
+            }
+        } catch (err) {
+            console.error('Error en login:', err);
+            setError(
+                err.response?.data?.message || 
+                'Error al iniciar sesión. Verifica tus credenciales o intenta nuevamente.'
+            );
+        }
+    };
+
+    return (
+        <div style={{ maxWidth: '400px', margin: '0 auto', padding: '20px' }}>
+            <h2>Iniciar Sesión</h2>
+            <form onSubmit={submit}>
+                <div style={{ marginBottom: '10px' }}>
+                    <label htmlFor="email">Email</label>
+                    <input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="Email"
+                        required
+                        style={{ width: '100%', padding: '8px', marginTop: '5px' }}
+                    />
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                    <label htmlFor="password">Contraseña</label>
+                    <input
+                        id="password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Contraseña"
+                        required
+                        style={{ width: '100%', padding: '8px', marginTop: '5px' }}
+                    />
+                </div>
+                <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#007BFF', color: '#FFF', border: 'none', borderRadius: '5px' }}>
+                    Ingresar
+                </button>
+                {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
+            </form>
         </div>
-        <div>
-          <label>Contraseña</label><br/>
-          <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required />
-        </div>
-        <button type="submit">Ingresar</button>
-        {error && <div style={{ color: 'red', marginTop: 8 }}>{error}</div>}
-      </form>
-    </div>
-  );
-}
+    );
+};
+
+export default Login;

@@ -8,11 +8,20 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// DbContext
+// Configuración de logging
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole(); // Habilitar logs en la consola
+builder.Logging.AddDebug(); // Habilitar logs para depuración
+
+// Crear un logger manualmente
+var loggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
+var logger = loggerFactory.CreateLogger("Program");
+
+// Configuración de DbContext
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// JWT Auth
+// Configuración de JWT Auth
 var keyBase64 = builder.Configuration["Jwt:KeyBase64"];
 byte[] signingKeyBytes;
 if (!string.IsNullOrEmpty(keyBase64))
@@ -23,20 +32,29 @@ if (!string.IsNullOrEmpty(keyBase64))
     }
     catch (FormatException)
     {
+        logger.LogError("Jwt:KeyBase64 is not a valid base64 string.");
         throw new Exception("Jwt:KeyBase64 is not a valid base64 string.");
     }
 }
 else
 {
     var key = builder.Configuration["Jwt:Key"];
-    if (string.IsNullOrEmpty(key)) throw new Exception("Jwt signing key missing. Set 'Jwt:KeyBase64' or 'Jwt:Key' in configuration.");
+    if (string.IsNullOrEmpty(key))
+    {
+        logger.LogError("Jwt signing key missing. Set 'Jwt:KeyBase64' or 'Jwt:Key' in configuration.");
+        throw new Exception("Jwt signing key missing. Set 'Jwt:KeyBase64' or 'Jwt:Key' in configuration.");
+    }
     signingKeyBytes = Encoding.UTF8.GetBytes(key);
 }
 
-// Ensure key length > 256 bits
+// Asegurarse de que la clave tenga más de 256 bits
 if (signingKeyBytes.Length * 8 <= 256)
+{
+    logger.LogError("Configured JWT key is too short. Use a key longer than 256 bits (recommended 512 bits).");
     throw new Exception("Configured JWT key is too short. Use a key longer than 256 bits (recommended 512 bits).");
+}
 
+// Configuración de autenticación JWT
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -47,30 +65,32 @@ builder.Services.AddAuthentication(options =>
     {
         ValidateIssuer = true,
         ValidIssuer = builder.Configuration["Jwt:Issuer"],
+
         ValidateAudience = true,
         ValidAudience = builder.Configuration["Jwt:Audience"],
+
         ValidateLifetime = true,
         IssuerSigningKey = new SymmetricSecurityKey(signingKeyBytes),
-        ClockSkew = TimeSpan.Zero // Reduce tolerancia de tiempo para tokens expirados
+        ClockSkew = TimeSpan.FromMinutes(5) // Permite un margen de 5 minutos para desajustes de tiempo
     };
 
-    // Opcional: Registrar eventos para depuración
+    // Registrar eventos para depuración
     options.Events = new JwtBearerEvents
     {
         OnAuthenticationFailed = context =>
         {
-            Console.WriteLine($"Authentication failed: {context.Exception.Message}");
+            logger.LogWarning($"Authentication failed: {context.Exception.Message}");
             return Task.CompletedTask;
         },
         OnTokenValidated = context =>
         {
-            Console.WriteLine("Token validated successfully.");
+            logger.LogInformation("Token validated successfully.");
             return Task.CompletedTask;
         }
     };
 });
 
-// CORS
+// Configuración de CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowLocalDev", policy =>
@@ -82,16 +102,17 @@ builder.Services.AddCors(options =>
     });
 });
 
-// DI - services
+// Inyección de dependencias (DI) - servicios
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<NoteService>();
 builder.Services.AddScoped<AiService>();
 builder.Services.AddScoped<PlannerService>();
 builder.Services.AddScoped<ExecutorService>();
 
-// Worker
+// Configuración de servicios en segundo plano
 builder.Services.AddHostedService<AgentWorker>();
 
+// Configuración de controladores y Swagger
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -131,19 +152,19 @@ app.UseCors("AllowLocalDev");
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Asegurarse de que Swagger esté activado
-app.UseSwagger();
-app.UseSwaggerUI(c =>
-{
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "NotesApi v1");
-    // opcional: c.RoutePrefix = string.Empty; // para servir Swagger en la raíz
-});
-
+// Configuración de Swagger
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "NotesApi v1");
+        // opcional: c.RoutePrefix = string.Empty; // para servir Swagger en la raíz
+    });
 }
 
+// Mapear controladores
 app.MapControllers();
+
+logger.LogInformation("La aplicación ha iniciado correctamente.");
 app.Run();
