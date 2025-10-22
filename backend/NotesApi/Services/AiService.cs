@@ -21,7 +21,7 @@ namespace NotesApi.Services
         public bool IsPromptAllowed(string prompt) =>
             AllowedPrompts.Any(p => p.Equals(prompt.Trim(), StringComparison.OrdinalIgnoreCase));
 
-        // Simula plan JSON. En producción llama a LLM y valida JSON.
+        
         public string GeneratePlan(string prompt)
         {
             if (!IsPromptAllowed(prompt)) throw new Exception("Prompt no permitido");
