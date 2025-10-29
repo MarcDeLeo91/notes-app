@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace NotesApi.Services
 {
@@ -22,6 +23,11 @@ namespace NotesApi.Services
             JsonDocument.Parse(planJson);
 
             return planJson;
+        }
+
+        public async Task<string> GeneratePlanAsync(string prompt)
+        {
+            return await Task.Run(() => GeneratePlan(prompt));
         }
 
         public List<PlanStep> ParsePlan(string planJson)

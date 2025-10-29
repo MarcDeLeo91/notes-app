@@ -1,14 +1,14 @@
 :root {
-  --primary: #4f46e5;
-  --primary-light: #6366f1;
-  --secondary: #10b981;
-  --background: #f9fafb;
-  --surface: #ffffff;
-  --text: #1f2937;
-  --text-light: #6b7280;
-  --border: #e5e7eb;
+  --primary: #1e40af;
+  --primary-light: #2563eb;
+  --secondary: #0f766e;
+  --background: #1f2937;
+  --surface: #374151;
+  --text: #f3f4f6;
+  --text-light: #9ca3af;
+  --border: #4b5563;
 
-  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
   --radius: 12px;
 }
 
@@ -71,7 +71,7 @@ nav a:hover {
 
 .note-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.7);
 }
 
 .note-card h3 {
@@ -167,4 +167,29 @@ textarea {
 
 .mt-4 {
   margin-top: 1rem;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.table th {
+  background-color: var(--primary);
+  color: var(--text);
+  padding: 0.8rem;
+  text-align: left;
+}
+
+.table td {
+  background-color: var(--surface);
+  color: var(--text);
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+}
+
+.table tr:hover td {
+  background-color: var(--primary-light);
+  color: var(--text);
 }

@@ -72,8 +72,8 @@ const Login = () => {
                         style={{ width: '100%', padding: '8px', marginTop: '5px' }}
                     />
                 </div>
-                <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#007BFF', color: '#FFF', border: 'none', borderRadius: '5px' }}>
-                    Ingresar
+                <button type="submit" style={{ width: '150px', padding: '10px', backgroundColor: '#007BFF', color: '#FFF', border: 'none', borderRadius: '5px' }}>
+                    Entrar
                 </button>
                 {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
             </form>

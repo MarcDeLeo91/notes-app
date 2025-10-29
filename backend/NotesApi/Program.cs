@@ -5,21 +5,24 @@ using Microsoft.IdentityModel.Tokens;
 using NotesApi.Data;
 using NotesApi.Services;
 using Microsoft.OpenApi.Models;
+using NotesApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Configuración de logging
 builder.Logging.ClearProviders();
-builder.Logging.AddConsole(); // Habilitar logs en la consola
-builder.Logging.AddDebug(); // Habilitar logs para depuración
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
 
-// Crear un logger manualmente
 var loggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
 var logger = loggerFactory.CreateLogger("Program");
 
 // Configuración de DbContext
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
+                       ?? "Data Source=notes.db";
+
 builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+    opt.UseSqlite(connectionString));
 
 // Configuración de JWT Auth
 var keyBase64 = builder.Configuration["Jwt:KeyBase64"];
@@ -47,14 +50,12 @@ else
     signingKeyBytes = Encoding.UTF8.GetBytes(key);
 }
 
-// Asegurarse de que la clave tenga más de 256 bits
 if (signingKeyBytes.Length * 8 <= 256)
 {
     logger.LogError("Configured JWT key is too short. Use a key longer than 256 bits (recommended 512 bits).");
     throw new Exception("Configured JWT key is too short. Use a key longer than 256 bits (recommended 512 bits).");
 }
 
-// Configuración de autenticación JWT
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -71,10 +72,9 @@ builder.Services.AddAuthentication(options =>
 
         ValidateLifetime = true,
         IssuerSigningKey = new SymmetricSecurityKey(signingKeyBytes),
-        ClockSkew = TimeSpan.FromMinutes(5) // Permite un margen de 5 minutos para desajustes de tiempo
+        ClockSkew = TimeSpan.FromMinutes(5)
     };
 
-    // Registrar eventos para depuración
     options.Events = new JwtBearerEvents
     {
         OnAuthenticationFailed = context =>
@@ -95,10 +95,9 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowLocalDev", policy =>
     {
-        policy.WithOrigins("http://localhost:5173") // Vite dev server
+        policy.WithOrigins("http://localhost:5173", "http://localhost:3000") // Agrega el puerto correcto aquí
               .AllowAnyHeader()
               .AllowAnyMethod();
-              // .AllowCredentials(); // Descomentar si usas cookies/sesiones
     });
 });
 
@@ -108,12 +107,20 @@ builder.Services.AddScoped<NoteService>();
 builder.Services.AddScoped<AiService>();
 builder.Services.AddScoped<PlannerService>();
 builder.Services.AddScoped<ExecutorService>();
+builder.Services.AddScoped<EstudianteService>();
+builder.Services.AddScoped<ProfesorService>();
+builder.Services.AddScoped<CursoService>();
+builder.Services.AddScoped<InscripcionService>();
+builder.Services.AddScoped<NotaService>();
 
 // Configuración de servicios en segundo plano
 builder.Services.AddHostedService<AgentWorker>();
 
 // Configuración de controladores y Swagger
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.Preserve;
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -143,27 +150,61 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
+// Aplicar migraciones y seed inicial
+using (var scope = app.Services.CreateScope())
+{
+    var ctx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    ctx.Database.Migrate();
+
+    if (!ctx.Profesores.Any())
+    {
+        var p1 = new Profesor { Nombre = "Ana", Apellido = "Lopez", Email = "ana@uni.edu", Departamento = "Matemáticas" };
+        var p2 = new Profesor { Nombre = "Carlos", Apellido = "Ramirez", Email = "carlos@uni.edu", Departamento = "Física" };
+        ctx.Profesores.AddRange(p1, p2);
+        ctx.SaveChanges();
+
+        var c1 = new Curso { Nombre = "Álgebra I", Codigo = "MAT101", Creditos = 4, ProfesorId = p1.Id };
+        var c2 = new Curso { Nombre = "Física I", Codigo = "FIS101", Creditos = 3, ProfesorId = p2.Id };
+        ctx.Cursos.AddRange(c1, c2);
+        ctx.SaveChanges();
+
+        var e1 = new Estudiante { Nombre = "Juan", Apellido = "Perez", Email = "juan@ejemplo.com", FechaNacimiento = new DateTime(2000, 1, 1) };
+        var e2 = new Estudiante { Nombre = "Luisa", Apellido = "Martinez", Email = "luisa@ejemplo.com", FechaNacimiento = new DateTime(2001, 5, 12) };
+        ctx.Estudiantes.AddRange(e1, e2);
+        ctx.SaveChanges();
+
+        var ins1 = new Inscripcion { EstudianteId = e1.Id, CursoId = c1.Id };
+        var ins2 = new Inscripcion { EstudianteId = e2.Id, CursoId = c1.Id };
+        var ins3 = new Inscripcion { EstudianteId = e1.Id, CursoId = c2.Id };
+        ctx.Inscripciones.AddRange(ins1, ins2, ins3);
+        ctx.SaveChanges();
+
+        ctx.Notas.AddRange(
+            new NotaAcademica { InscripcionId = ins1.Id, Valor = 4.5m },
+            new NotaAcademica { InscripcionId = ins2.Id, Valor = 3.8m },
+            new NotaAcademica { InscripcionId = ins3.Id, Valor = 4.0m }
+        );
+        ctx.SaveChanges();
+
+        logger.LogInformation("Seed inicial aplicado: profesores, cursos, estudiantes, inscripciones, notas.");
+    }
+}
+
 // Middleware
 app.UseRouting();
-
-// Aplicar CORS antes de autenticación/autorizar
 app.UseCors("AllowLocalDev");
-
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Configuración de Swagger
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "NotesApi v1");
-        // opcional: c.RoutePrefix = string.Empty; // para servir Swagger en la raíz
     });
 }
 
-// Mapear controladores
 app.MapControllers();
 
 logger.LogInformation("La aplicación ha iniciado correctamente.");

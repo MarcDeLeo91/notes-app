@@ -1,76 +1,72 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using NotesApi.Services;
-using System.Security.Claims;
 using NotesApi.Data;
 using NotesApi.Models;
+using NotesApi.Services;
+using NotesApi.Utilities;
 
 namespace NotesApi.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
     public class AiController : ControllerBase
     {
-        private readonly AiService _aiService;
+        private readonly AiService _ai;
         private readonly PlannerService _planner;
-        private readonly ExecutorService _executor;
-        private readonly AppDbContext _context;
+        private readonly AppDbContext _db;
+        private readonly ILogger<AiController> _logger;
 
-        public AiController(AiService aiService, PlannerService planner, ExecutorService executor, AppDbContext context)
+        public AiController(AiService ai, PlannerService planner, AppDbContext db, ILogger<AiController> logger)
         {
-            _aiService = aiService;
+            _ai = ai;
             _planner = planner;
-            _executor = executor;
-            _context = context;
-        }
-
-        private int GetUserId()
-        {
-            var idStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(idStr) || !int.TryParse(idStr, out var id))
-            {
-                throw new UnauthorizedAccessException("User id missing or invalid.");
-            }
-            return id;
+            _db = db;
+            _logger = logger;
         }
 
         [HttpPost("execute")]
         public async Task<IActionResult> ExecutePrompt([FromBody] PromptRequest req)
         {
-            if (string.IsNullOrWhiteSpace(req.Prompt)) return BadRequest("Falta 'prompt'");
+            if (string.IsNullOrWhiteSpace(req.Prompt))
+                return BadRequest(new { message = "Prompt vacío" });
 
-            if (!_aiService.IsPromptAllowed(req.Prompt))
-                return BadRequest("Prompt no permitido");
+            // Validar prompt permitido y extraer comando/params
+            var map = PromptMapper.ValidateAndMap(req.Prompt);
+            if (!map.IsValid)
+                return BadRequest(map.Reason);
 
-            // Generar plan
-            var planJson = _planner.GeneratePlan(req.Prompt);
-            var steps = _planner.ParsePlan(planJson);
-
-            // Ejecutar plan
-            var results = await _executor.ExecutePlan(GetUserId(), steps);
-
-            // Guardar logs mínimos (puedes extender)
-            var agentTask = new NotesApi.Models.AgentTask
+            // Crear tarea de agente
+            var task = new AgentTask
             {
-                UserId = GetUserId().ToString(),
                 Prompt = req.Prompt,
-                PlanJson = planJson,
-                Status = "done",
+                Status = "pending",
                 CreatedAt = DateTime.UtcNow,
-                CompletedAt = DateTime.UtcNow
+                UserId = req.UserId
             };
-            _context.AgentTasks.Add(agentTask);
-            await _context.SaveChangesAsync();
+            _db.AgentTasks.Add(task);
+            await _db.SaveChangesAsync();
 
-            return Ok(new { plan = planJson, results });
+            _logger.LogInformation("AgentTask creado id={TaskId} command={Command}", task.Id, map.CommandKey);
+
+            // Opcional: generar plan inmediatamente (el worker puede procesar después)
+            var plan = await _planner.GeneratePlanAsync(req.Prompt);
+
+            // Llamada simple a AiService para obtener texto / resumen
+            var aiResult = await _ai.ExecuteAsync(req.Prompt);
+
+            // Guardar plan JSON en la tarea
+            task.PlanJson = System.Text.Json.JsonSerializer.Serialize(new { map.CommandKey, plan, aiResult });
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                taskId = task.Id,
+                command = map.CommandKey,
+                parameters = map.CommandKey,
+                plan,
+                aiResult
+            });
         }
 
-        // Endpoint público para verificar que la API y Swagger funcionan sin token
-        [AllowAnonymous]
-        [HttpGet("health")]
-        public IActionResult Health() => Ok(new { status = "ok", now = DateTime.UtcNow });
+        public class PromptRequest { public string Prompt { get; set; } = ""; public int? UserId { get; set; } = null; }
     }
-
-    public class PromptRequest { public string Prompt { get; set; } = string.Empty; }
 }

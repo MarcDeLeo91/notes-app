@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace NotesApi.Services
 {
@@ -35,6 +36,11 @@ namespace NotesApi.Services
             };
 
             return JsonSerializer.Serialize(plan);
+        }
+
+        public async Task<string> ExecuteAsync(string prompt)
+        {
+            return await Task.Run(() => GeneratePlan(prompt));
         }
     }
 }

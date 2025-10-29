@@ -6,11 +6,10 @@ namespace NotesApi.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class NotesController : ControllerBase
+    public class EstudiantesController : ControllerBase
     {
-        private readonly NoteService _service;
-
-        public NotesController(NoteService service) => _service = service;
+        private readonly EstudianteService _service;
+        public EstudiantesController(EstudianteService service) => _service = service;
 
         [HttpGet]
         public async Task<IActionResult> GetAll() => Ok(await _service.GetAllAsync());
@@ -18,24 +17,23 @@ namespace NotesApi.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> Get(int id)
         {
-            var n = await _service.GetByIdAsync(id);
-            if (n == null) return NotFound();
-            return Ok(n);
+            var e = await _service.GetByIdAsync(id);
+            if (e == null) return NotFound();
+            return Ok(e);
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] Note note)
+        public async Task<IActionResult> Create([FromBody] Estudiante estudiante)
         {
-            var created = await _service.CreateAsync(note);
+            var created = await _service.CreateAsync(estudiante);
             return Ok(created);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] Note note)
+        public async Task<IActionResult> Update(int id, [FromBody] Estudiante estudiante)
         {
-            // Use the service overload that accepts a single Note instance
-            var updated = await _service.UpdateAsync(note);
-            if (updated == null) return NotFound();
+            var updated = await _service.UpdateAsync(id, estudiante);
+            if (!updated) return NotFound();
             return Ok(updated);
         }
 

@@ -7,56 +7,43 @@ namespace NotesApi.Services
     public class NoteService
     {
         private readonly AppDbContext _context;
+        public NoteService(AppDbContext context) => _context = context;
 
-        public NoteService(AppDbContext context)
-        {
-            _context = context;
-        }
+        public async Task<IEnumerable<Note>> GetAllAsync() =>
+            await _context.Notes.AsNoTracking().ToListAsync();
 
-        public async Task<List<Note>> GetNotes(int userId)
-        {
-            return await _context.Notes.Where(n => n.UserId == userId).ToListAsync();
-        }
+        public async Task<Note?> GetByIdAsync(int id) =>
+            await _context.Notes.FindAsync(id);
 
-        public async Task<Note?> GetNote(int userId, int noteId)
+        public async Task<Note> CreateAsync(Note note)
         {
-            return await _context.Notes.FirstOrDefaultAsync(n => n.Id == noteId && n.UserId == userId);
-        }
-
-        public async Task<Note> CreateNote(int userId, Note note)
-        {
-            note.UserId = userId;
+            note.CreatedAt = DateTime.UtcNow;
             _context.Notes.Add(note);
             await _context.SaveChangesAsync();
             return note;
         }
 
-        public async Task<bool> UpdateNote(int userId, int noteId, Note updatedNote)
+        public async Task<bool> UpdateAsync(Note note)
         {
-            var note = await _context.Notes.FirstOrDefaultAsync(n => n.Id == noteId && n.UserId == userId);
-            if (note == null) return false;
+            var existing = await _context.Notes.FindAsync(note.Id);
+            if (existing == null) return false;
 
-            note.Title = updatedNote.Title;
-            note.Content = updatedNote.Content;
-            note.IsArchived = updatedNote.IsArchived;
-            note.IsFavorite = updatedNote.IsFavorite;
-            note.UpdatedAt = DateTime.UtcNow;
+            existing.Title = note.Title;
+            existing.Content = note.Content;
+            existing.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
             return true;
         }
 
-        public async Task<bool> DeleteNote(int userId, int noteId)
+        public async Task<bool> DeleteAsync(int id)
         {
-            var note = await _context.Notes.FirstOrDefaultAsync(n => n.Id == noteId && n.UserId == userId);
+            var note = await _context.Notes.FindAsync(id);
             if (note == null) return false;
 
             _context.Notes.Remove(note);
             await _context.SaveChangesAsync();
             return true;
         }
-
-        // métodos auxiliares que puedes implementar si deseas:
-        // ArchiveNote, ToggleFavorite, AddTag, SearchNotes, etc.
     }
 }

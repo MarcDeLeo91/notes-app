@@ -1,12 +1,13 @@
-import React from 'react';
+import React from "react";
 
-export default function NoteCard({ note, onDelete }) {
+export default function NoteCard({ note }) {
   return (
-    <div style={{ border: '1px solid #ccc', padding: 10, borderRadius: 6 }}>
-      <h4>{note.title}</h4>
-      <p>{note.content}</p>
-      <div style={{ fontSize: 12, color: '#666' }}>Creada: {new Date(note.createdAt).toLocaleString()}</div>
-      <button onClick={onDelete} style={{ marginTop: 8 }}>Eliminar</button>
+    <div className="bg-white shadow-md rounded-lg p-4 border hover:shadow-lg transition">
+      <h3 className="text-lg font-semibold mb-1">{note.title}</h3>
+      <p className="text-sm text-gray-700">{note.content}</p>
+      <div className="text-xs text-gray-400 mt-2">
+        Creado el {new Date(note.createdAt).toLocaleDateString()}
+      </div>
     </div>
   );
 }

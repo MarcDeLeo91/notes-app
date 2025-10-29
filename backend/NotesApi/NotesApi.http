@@ -1,6 +1,67 @@
-@NotesApi_HostAddress = http://localhost:5027
+@host = http://localhost:5027
 
-GET {{NotesApi_HostAddress}}/weatherforecast/
-Accept: application/json
+### 🔐 Login
+POST {{host}}/api/auth/login
+Content-Type: application/json
 
-###
+{
+  "email": "admin@demo.com",
+  "password": "123456"
+}
+
+### 🧍 Crear estudiante
+POST {{host}}/api/estudiantes
+Content-Type: application/json
+
+{
+  "nombre": "Marco",
+  "apellido": "De Leon",
+  "email": "marco@demo.com"
+}
+
+### 🧑‍🏫 Crear profesor
+POST {{host}}/api/profesores
+Content-Type: application/json
+
+{
+  "nombre": "Ana",
+  "apellido": "Soto",
+  "email": "ana@demo.com"
+}
+
+### 📚 Crear curso
+POST {{host}}/api/cursos
+Content-Type: application/json
+
+{
+  "codigo": "SOF101",
+  "nombre": "Sistemas Operativos I",
+  "profesorId": 1
+}
+
+### 🎓 Inscribir estudiante
+POST {{host}}/api/inscripciones
+Content-Type: application/json
+
+{
+  "estudianteId": 1,
+  "cursoId": 1
+}
+
+### 🧮 Agregar nota
+POST {{host}}/api/notas
+Content-Type: application/json
+
+{
+  "inscripcionId": 1,
+  "valor": 90
+}
+
+### 🤖 Prompt (agente inteligente)
+POST {{host}}/api/ai/execute
+Content-Type: application/json
+
+{
+  "prompt": "crear estudiante Juan Perez email juan@demo.com",
+  "userId": 1
+}

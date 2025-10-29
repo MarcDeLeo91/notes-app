@@ -1,89 +1,56 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using NotesApi.Data;
-using NotesApi.Models;
-using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 
 namespace NotesApi.Services
 {
     public class AgentWorker : BackgroundService
     {
-        private readonly IServiceScopeFactory _scopeFactory;
+        private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<AgentWorker> _logger;
-        private readonly TimeSpan _delay = TimeSpan.FromSeconds(10);
 
-        public AgentWorker(IServiceScopeFactory scopeFactory, ILogger<AgentWorker> logger)
+        public AgentWorker(IServiceProvider serviceProvider, ILogger<AgentWorker> logger)
         {
-            _scopeFactory = scopeFactory;
+            _serviceProvider = serviceProvider;
             _logger = logger;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("AgentWorker iniciado...");
-
+            _logger.LogInformation("AgentWorker iniciado.");
             while (!stoppingToken.IsCancellationRequested)
             {
-                try
+                using var scope = _serviceProvider.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                var pending = await db.AgentTasks
+                    .Where(t => t.Status == "pending")
+                    .OrderBy(t => t.CreatedAt)
+                    .FirstOrDefaultAsync(stoppingToken);
+
+                if (pending != null)
                 {
-                    using var scope = _scopeFactory.CreateScope();
-                    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                    var planner = scope.ServiceProvider.GetRequiredService<PlannerService>();
-                    var executor = scope.ServiceProvider.GetRequiredService<ExecutorService>();
+                    pending.Status = "running";
+                    await db.SaveChangesAsync(stoppingToken);
+                    _logger.LogInformation($"Procesando tarea: {pending.Prompt}");
 
-                    var pendingTasks = await context.AgentTasks
-                        .Where(t => t.Status == "pending")
-                        .OrderBy(t => t.CreatedAt)
-                        .ToListAsync(stoppingToken);
-
-                    foreach (var task in pendingTasks)
+                    try
                     {
-                        try
-                        {
-                            task.Status = "running";
-                            await context.SaveChangesAsync(stoppingToken);
-
-                            var planJson = planner.GeneratePlan(task.Prompt);
-                            task.PlanJson = planJson;
-                            await context.SaveChangesAsync(stoppingToken);
-
-                            var steps = planner.ParsePlan(planJson);
-                            var results = await executor.ExecutePlan(int.Parse(task.UserId), steps);
-
-                            foreach (var r in results)
-                            {
-                                context.AgentAuditLogs.Add(new AgentAuditLog
-                                {
-                                    AgentTaskId = task.Id,
-                                    StepIndex = r.StepIndex,
-                                    Action = r.Action,
-                                    ParametersJson = "{}", // opcional
-                                    Result = r.Success ? "success" : "failed",
-                                    Message = r.Message
-                                });
-                            }
-
-                            task.Status = "done";
-                            task.CompletedAt = DateTime.UtcNow;
-                            await context.SaveChangesAsync(stoppingToken);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, $"Error ejecutando tarea AgentTask {task.Id}");
-                            task.Status = "failed";
-                            await context.SaveChangesAsync(stoppingToken);
-                        }
+                        await Task.Delay(1000, stoppingToken); // Simulación
+                        pending.Status = "completed";
+                        pending.CompletedAt = DateTime.UtcNow;
                     }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error en ciclo AgentWorker");
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error en tarea del agente");
+                        pending.Status = "failed";
+                    }
+
+                    await db.SaveChangesAsync(stoppingToken);
                 }
 
-                await Task.Delay(_delay, stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
-
-            _logger.LogInformation("AgentWorker detenido.");
         }
     }
 }

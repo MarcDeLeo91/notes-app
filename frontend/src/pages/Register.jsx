@@ -25,13 +25,12 @@ export default function Register(){
       <form onSubmit={submit}>
         <div>
           <label>Email</label><br/>
-          <input value={email} onChange={e=>setEmail(e.target.value)} required/>
+          <input value={email} onChange={e=>setEmail(e.target.value)} required placeholder="Email"/>
         </div>
         <div>
           <label>Contraseña</label><br/>
-          <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required/>
+          <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required placeholder="Contraseña"/>
         </div>
-        <button type="submit">Registrar</button>
         {error && <div style={{ color: 'red', marginTop: 8 }}>{error}</div>}
       </form>
     </div>
